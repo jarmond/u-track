@@ -171,6 +171,10 @@ pz=full(trackedFeatInfo(:,3:8:end));
 px(px==0)=nan;
 py(py==0)=nan;
 pz(pz==0)=nan;
+if all(isnan(pz))
+    % if not 3D keep a fake Z coordinate
+    pz(isfinite(px)) = 1;
+end
 
 vx=diff(px,1,2);
 vy=diff(py,1,2);
@@ -225,7 +229,7 @@ xyzVel=cell2mat(arrayfun(@(iTrack) kalmanFilterInfo(trackEndTime(iTrack))...
     [1:nTracks]','UniformOutput',0)); 
 
 
-trackEndSpeed=sqrt(sum(trackEndPxyzVxyz(:,4:6).^2,2));
+trackEndSpeed=sqrt(nansum(trackEndPxyzVxyz(:,4:6).^2,2));
 vMax=prctile(trackEndSpeed,95);
 vMed=median(trackEndSpeed);
 
@@ -301,7 +305,7 @@ for iFrame = 1:nFrames-1
     spY=repmat(trackStartPxyzVxyz(startsToConsider,2)',[nEnds 1]);
     spZ=repmat(trackStartPxyzVxyz(startsToConsider,3)',[nEnds 1]);
     % nEnds x nStarts distance matrix containing displacement vector magnitude
-    dispMag=sqrt((epX-spX).^2+(epY-spY).^2+(epZ-spZ).^2);
+    dispMag=sqrt(nansum(cat(3,(epX-spX).^2,(epY-spY).^2,(epZ-spZ).^2),3));
 
     % we will only consider end/start pairs where the distance from end to start is less than
     % the max(forwardCutoff,backwardCutoff)
@@ -811,7 +815,7 @@ segZYXorig=segZYX;
 % find how many phantom pts are needed to extend bwd vector past max bwd cutoff
 % endTrackStartPxyVxy is not the whole matrix - only for this particular end
 % track
-endMag=sqrt(sum(endTrackStartPxyVxy(1,4:6).^2));
+endMag=sqrt(nansum(endTrackStartPxyVxy(1,4:6).^2));
 if (endMag~=0)
     nRepPhantom=ceil(max(maxCutoff)/endMag);
 else
@@ -827,10 +831,10 @@ segZYX=[phantomZYX; segZYX];
 % treat every consecutive pair of points in segYX as a line segment BC
 bZYX=segZYX(1:end-1,:); % here's a vector containing the first pt of each line segment (B)
 bcZYX=diff(segZYX); % velocity components
-BC=sqrt(sum(bcZYX.^2,2)); % BC length
+BC=sqrt(nansum(bcZYX.^2,2)); % BC length
 
 % keep track of which entries don't exist
-nanEntries=double(isnan(bcZYX(:,1)));
+nanEntries=double(isnan(bcZYX(:,3)));
 nanEntries=swapMaskValues(nanEntries,[0,1],[1,nan]);
 nPts=size(ptZYX,1);
 dPerp=zeros(nPts,1);
@@ -843,14 +847,14 @@ for i=1:size(ptZYX,1)
     temp=repmat(ptZYX(i,:),[size(segZYX,1),1])-segZYX;
 
     bpZYX=temp(1:end-1,:); % velocity components for P-B
-    BP=sqrt(sum(bpZYX.^2,2)); % distance from P to B
+    BP=sqrt(nansum(bpZYX.^2,2)); % distance from P to B
 
     cpZYX=temp(2:end,:); % velocity components for P-C
-    CP=sqrt(sum(cpZYX.^2,2)); % distance from P to C
+    CP=sqrt(nansum(cpZYX.^2,2)); % distance from P to C
 
     % get fraction mag(vector from B to point on line closest to P)/mag(BC)
     % if t0<0, closest to b; if t0>0 then closet to c
-    t0=(bcZYX(:,1).*bpZYX(:,1)+bcZYX(:,2).*bpZYX(:,2)+bcZYX(:,3).*bpZYX(:,3))./(BC.^2);
+    t0=nansum(cat(3,bcZYX(:,1).*bpZYX(:,1),bcZYX(:,2).*bpZYX(:,2),bcZYX(:,3).*bpZYX(:,3)),3)./(BC.^2);
 
     D=zeros(length(t0),1);
     extraPt=zeros(length(t0),3);
@@ -895,7 +899,7 @@ for i=1:size(ptZYX,1)
     % difference from one point to its duplicate. this should give a good
     % local estimate of the instantaneous velocity
     pts2getLocalVel = temp(max(1,d1Idx-1):min(size(temp,1),d1Idx+3),:);
-    pts2getLocalVel(isnan(pts2getLocalVel(:,1)),:)=[];
+    pts2getLocalVel(isnan(pts2getLocalVel(:,3)),:)=[];
     velZYX=sum(diff(pts2getLocalVel))./(size(pts2getLocalVel,1)-2);
     evZ(i)=velZYX(1);
     evY(i)=velZYX(2);
